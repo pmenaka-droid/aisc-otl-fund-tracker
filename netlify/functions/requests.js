@@ -1,6 +1,6 @@
 let requests = [];
 
-export async function handler(event, context) {
+exports.handler = async function(event, context) {
   const { httpMethod } = event;
   
   // Enable CORS
@@ -63,4 +63,4 @@ export async function handler(event, context) {
       body: JSON.stringify({ error: 'Server error' })
     };
   }
-}
+};

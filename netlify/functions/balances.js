@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+const https = require('https');
 
 const GOOGLE_SHEETS_API_KEY = 'AIzaSyAgcRMy-GyqbGrtLF4vYPzMhWiWqKCcsqc';
 const SPREADSHEET_ID = '1tRmKPFJUwZtxJKlO86W31FKuzvbYArVQwm3wRr-AWW4';
@@ -29,24 +29,30 @@ const generateEmailFromName = (name) => {
   return `${name.toLowerCase().replace(/\s+/g, '')}@aischennai.org`;
 };
 
-export async function handler(event, context) {
+exports.handler = async function(event, context) {
   try {
     console.log('🔄 Fetching balances from Google Sheets...');
     
     // Try CSV export first (doesn't require API key)
     const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
     
-    const response = await fetch(csvUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      }
+    const response = await new Promise((resolve, reject) => {
+      https.get(csvUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => resolve({ ok: res.statusCode === 200, data }));
+      }).on('error', reject);
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: response.status`);
     }
     
-    const csvData = await response.text();
+    const csvData = response.data;
     const lines = csvData.split('\n').filter(line => line.trim());
     
     if (lines.length <= 1) {
@@ -105,4 +111,4 @@ export async function handler(event, context) {
       body: JSON.stringify({ error: 'Failed to fetch balances' })
     };
   }
-}
+};
