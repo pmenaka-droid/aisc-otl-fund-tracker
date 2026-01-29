@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -7,19 +7,15 @@ import {
   XCircle, 
   FileText,
   User,
-  Sparkles,
   Lock,
-  ExternalLink,
   Loader2,
   Clock,
-  Briefcase,
   MapPin,
   Building2,
   Info,
   Globe,
   DollarSign
 } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
 import { PLRequest, StaffBalance, ApprovalStatus, UserSession } from '../types';
 
 interface Props {
@@ -34,51 +30,8 @@ const ApprovalPage: React.FC<Props> = ({ requests, balances, onUpdate, currentUs
   const navigate = useNavigate();
   const [comments, setComments] = useState('');
   const [decision, setDecision] = useState<'APPROVE' | 'REJECT' | null>(null);
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [groundingLinks, setGroundingLinks] = useState<{title: string, uri: string}[]>([]);
-  const [isAiLoading, setIsAiLoading] = useState(false);
 
   const request = requests.find(r => r.id === requestId);
-
-  useEffect(() => {
-    if (request && (currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'DIRECTOR')) {
-      fetchAiVerification();
-    }
-  }, [request?.id]);
-
-  const fetchAiVerification = async () => {
-    if (!request) return;
-    setIsAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `
-        Verify the Professional Learning activity titled "${request.activityTitle}".
-        Provider: ${request.provider}. Website: ${request.websiteLink}.
-        Summary: ${request.description}.
-        
-        Using Google Search grounding, check if this is a real event/course and if the provider is reputable. 
-        Provide a concise 2-sentence summary for the approving officer.
-      `;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
-        contents: prompt,
-        config: { tools: [{ googleSearch: {} }] },
-      });
-
-      setAiInsight(response.text || "No specific details found.");
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const links = chunks.filter((c: any) => c.web).map((c: any) => ({
-        title: c.web.title || "Source",
-        uri: c.web.uri
-      }));
-      setGroundingLinks(links);
-    } catch (error) {
-      setAiInsight("Unable to perform real-time verification at this moment.");
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
 
   if (!request) {
     return (
@@ -251,15 +204,6 @@ const ApprovalPage: React.FC<Props> = ({ requests, balances, onUpdate, currentUs
             <p className="text-sm font-medium text-slate-600 leading-relaxed bg-slate-50 p-6 rounded-2xl border border-slate-100">
               {request.description}
             </p>
-          </div>
-
-          <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-6 relative overflow-hidden">
-            <Sparkles className="absolute top-2 right-2 text-indigo-200" size={24} />
-            <h4 className="text-[10px] font-black text-indigo-600 uppercase mb-3 tracking-widest flex items-center gap-2">
-               Google Search Verification
-               {isAiLoading && <Loader2 size={12} className="animate-spin" />}
-            </h4>
-            <p className="text-sm font-bold text-slate-700 italic leading-relaxed">"{aiInsight || 'Consulting real-time records...'}"</p>
           </div>
 
           {request.supervisorComments && (

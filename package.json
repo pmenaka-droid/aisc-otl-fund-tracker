@@ -11,14 +11,11 @@
     "dev:full": "npm run server & npm run dev"
   },
   "dependencies": {
-    "@google/genai": "^0.1.3",
-    "lucide-react": "^0.263.1",
+    "lucide-react": "^0.562.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.1",
-    "node-fetch": "^3.3.0",
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "node-fetch": "^3.3.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
