@@ -28,10 +28,8 @@ const App: React.FC = () => {
   const STORAGE_KEY_BALANCES = 'aisc_otl_balances_gmail_v1';
   const STORAGE_KEY_USER = 'aisc_otl_user_session_gmail';
 
-  // API base URL - change this to your Vercel URL after deployment
-  const API_BASE = process.env.NODE_ENV === 'production' 
-    ? 'https://your-vercel-app-url.vercel.app/api' 
-    : 'http://localhost:3001/api';
+  // API base URL - now uses Netlify Functions
+  const API_BASE = '/api';
 
   const [requests, setRequests] = useState<PLRequest[]>(INITIAL_REQUESTS);
   const [balances, setBalances] = useState<StaffBalance[]>(INITIAL_STAFF_BALANCES);
