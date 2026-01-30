@@ -1,6 +1,8 @@
 let requests = [];
 
-exports.handler = async function(event, context) {
+const handler = async function(event, context) {
+  console.log('🔄 Requests function called, method:', event.httpMethod);
+  
   const { httpMethod } = event;
   
   // Enable CORS
@@ -12,6 +14,7 @@ exports.handler = async function(event, context) {
 
   try {
     if (httpMethod === 'GET') {
+      console.log('📤 Returning requests:', requests.length);
       return {
         statusCode: 200,
         headers,
@@ -22,6 +25,7 @@ exports.handler = async function(event, context) {
     if (httpMethod === 'POST') {
       const newRequest = JSON.parse(event.body);
       requests.unshift(newRequest);
+      console.log('➕ Added new request:', newRequest.id);
       
       return {
         statusCode: 201,
@@ -36,6 +40,7 @@ exports.handler = async function(event, context) {
       
       if (index !== -1) {
         requests[index] = updatedRequest;
+        console.log('✏️ Updated request:', updatedRequest.id);
         return {
           statusCode: 200,
           headers,
@@ -57,10 +62,13 @@ exports.handler = async function(event, context) {
     };
     
   } catch (error) {
+    console.error('❌ Error in requests function:', error.message);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Server error' })
+      body: JSON.stringify({ error: 'Server error', message: error.message })
     };
   }
 };
+
+module.exports = { handler };

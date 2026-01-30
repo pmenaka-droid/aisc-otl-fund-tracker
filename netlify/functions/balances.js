@@ -29,31 +29,49 @@ const generateEmailFromName = (name) => {
   return `${name.toLowerCase().replace(/\s+/g, '')}@aischennai.org`;
 };
 
-exports.handler = async function(event, context) {
+const handler = async (event, context) => {
+  console.log('🔄 Balances function called');
+  
   try {
     console.log('🔄 Fetching balances from Google Sheets...');
     
     // Try CSV export first (doesn't require API key)
     const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
     
+    console.log('📊 Fetching CSV from:', csvUrl);
+    
     const response = await new Promise((resolve, reject) => {
-      https.get(csvUrl, {
+      const req = https.get(csvUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
       }, (res) => {
+        console.log('📡 Response status:', res.statusCode);
         let data = '';
         res.on('data', chunk => data += chunk);
-        res.on('end', () => resolve({ ok: res.statusCode === 200, data }));
-      }).on('error', reject);
+        res.on('end', () => {
+          console.log('✅ CSV data received, length:', data.length);
+          resolve({ ok: res.statusCode === 200, data });
+        });
+      }).on('error', (err) => {
+        console.error('❌ HTTPS error:', err);
+        reject(err);
+      });
+      
+      req.setTimeout(10000, () => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      });
     });
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: response.status`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const csvData = response.data;
     const lines = csvData.split('\n').filter(line => line.trim());
+    
+    console.log('📋 Total lines found:', lines.length);
     
     if (lines.length <= 1) {
       return {
@@ -91,6 +109,8 @@ exports.handler = async function(event, context) {
       };
     }).filter(balance => balance.name);
     
+    console.log('✅ Processed balances:', balances.length);
+    
     return {
       statusCode: 200,
       headers: {
@@ -108,7 +128,9 @@ exports.handler = async function(event, context) {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ error: 'Failed to fetch balances' })
+      body: JSON.stringify({ error: 'Failed to fetch balances', message: error.message })
     };
   }
 };
+
+module.exports = { handler };
