@@ -1,13 +1,12 @@
-const { createClient } = require('@supabase/supabase-js');
+const { Pool } = require('pg');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Use Netlify environment variable for Neon connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
+  }
+});
 
 // Google Sheets integration for balances
 const https = require('https');
@@ -33,7 +32,7 @@ const generateEmailFromName = (name) => {
 
 exports.handler = async function(event, context) {
   try {
-    console.log('🔄 Fetching balances from Google Sheets and Supabase...');
+    console.log('🔄 Fetching balances from Google Sheets and Neon...');
     
     // First try to get from Google Sheets
     const csvUrl = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
@@ -81,32 +80,29 @@ exports.handler = async function(event, context) {
       }
     }
     
-    // Update Supabase with latest balances
+    // Update Neon with latest balances
     if (balances.length > 0) {
       for (const balance of balances) {
-        await supabase
-          .from('staff_balances')
-          .upsert({
-            email: balance.email,
-            name: balance.name,
-            department: balance.department,
-            remaining_balance: balance.remaining_balance,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'email'
-          });
+        await pool.query(`
+          INSERT INTO staff_balances (email, name, department, remaining_balance, updated_at)
+          VALUES ($1, $2, $3, $4, $5)
+          ON CONFLICT (email) DO UPDATE SET
+            name = EXCLUDED.name,
+            department = EXCLUDED.department,
+            remaining_balance = EXCLUDED.remaining_balance,
+            updated_at = EXCLUDED.updated_at
+        `, [
+          balance.email, balance.name, balance.department, 
+          balance.remaining_balance, new Date().toISOString()
+        ]);
       }
     }
     
-    // Get final balances from Supabase
-    const { data, error } = await supabase
-      .from('staff_balances')
-      .select('*');
-    
-    if (error) throw error;
+    // Get final balances from Neon
+    const result = await pool.query('SELECT * FROM staff_balances ORDER BY name');
     
     // Transform data to match frontend format
-    const formattedData = (data || []).map(item => ({
+    const formattedData = result.rows.map(item => ({
       email: item.email,
       name: item.name,
       department: item.department,
