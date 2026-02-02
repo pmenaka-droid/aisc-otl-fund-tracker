@@ -23,15 +23,43 @@ exports.handler = async function(event, context) {
         'SELECT * FROM pl_requests ORDER BY created_at DESC'
       );
       
+      // Transform database rows to match frontend format
+      const formattedData = result.rows.map(row => ({
+        id: row.id,
+        staffName: row.staff_name,
+        staffEmail: row.staff_email,
+        supervisorEmail: row.supervisor_email,
+        activityTitle: row.activity_title,
+        description: row.activity_description,
+        status: row.status,
+        totalCost: parseFloat(row.total_cost) || 0,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        supervisorComments: row.supervisor_comments,
+        otlDirectorComments: row.otl_director_comments,
+        facultyRole: row.faculty_role,
+        schoolSection: row.school_section || [],
+        provider: row.provider,
+        websiteLink: row.website_link,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        registrationCost: parseFloat(row.registration_cost) || 0,
+        travelCost: parseFloat(row.travel_cost) || 0,
+        accommodationCost: parseFloat(row.accommodation_cost) || 0,
+        otherCost: parseFloat(row.other_cost) || 0
+      }));
+      
+      console.log('✅ Returning requests from database:', formattedData.length);
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify(result.rows)
+        body: JSON.stringify(formattedData)
       };
     }
     
     if (httpMethod === 'POST') {
       const newRequest = JSON.parse(event.body);
+      console.log('📝 Creating new request:', newRequest.id, newRequest.staffName);
       
       const result = await pool.query(`
         INSERT INTO pl_requests (
@@ -52,10 +80,11 @@ exports.handler = async function(event, context) {
         newRequest.registrationCost, newRequest.travelCost, newRequest.accommodationCost, newRequest.otherCost
       ]);
       
+      console.log('✅ Request saved to database:', newRequest.id);
       return {
         statusCode: 201,
         headers,
-        body: JSON.stringify(result.rows[0])
+        body: JSON.stringify(newRequest)
       };
     }
     
