@@ -49,34 +49,18 @@ const App: React.FC = () => {
         fetch(`${API_BASE}/balances`)
       ]);
       
-      let requestsData = [];
-      
       if (requestsRes.ok) {
-        requestsData = await requestsRes.json();
+        const requestsData = await requestsRes.json();
         console.log('✅ Requests from API:', requestsData.length);
+        setRequests(requestsData);
+        localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
       } else {
-        console.log('⚠️ API requests failed, trying shared storage');
+        console.log('⚠️ API requests failed, using localStorage fallback');
+        const savedRequests = localStorage.getItem(STORAGE_KEY_REQS);
+        if (savedRequests) {
+          setRequests(JSON.parse(savedRequests));
+        }
       }
-      
-      // Always try to get from shared storage and merge
-      try {
-        const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
-        console.log('📁 Shared requests found:', sharedRequests.length);
-        
-        // Merge API and shared requests, remove duplicates
-        const allRequests = [...requestsData, ...sharedRequests];
-        const uniqueRequests = allRequests.filter((req, index, self) => 
-          index === self.findIndex(r => r.id === req.id)
-        );
-        
-        requestsData = uniqueRequests;
-        console.log('🔄 Merged requests total:', requestsData.length);
-      } catch (error) {
-        console.error('Failed to get shared requests:', error);
-      }
-      
-      setRequests(requestsData);
-      localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
       
       if (balancesRes.ok) {
         const balancesData = await balancesRes.json();
@@ -91,18 +75,6 @@ const App: React.FC = () => {
       const savedBalances = localStorage.getItem(STORAGE_KEY_BALANCES);
       if (savedRequests) setRequests(JSON.parse(savedRequests));
       if (savedBalances) setBalances(JSON.parse(savedBalances));
-      
-      // Also try shared storage for requests
-      try {
-        const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
-        if (sharedRequests.length > 0) {
-          console.log('📁 Using shared requests as fallback:', sharedRequests.length);
-          setRequests(sharedRequests);
-          localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(sharedRequests));
-        }
-      } catch (error) {
-        console.error('Failed to get shared requests:', error);
-      }
     }
   };
 
@@ -252,16 +224,6 @@ const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(updatedRequests));
     }
     
-    // Also save to a shared storage for supervisors
-    try {
-      // Save to localStorage with a shared key for all users
-      const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
-      const updatedShared = [newRequest, ...sharedRequests.filter(r => r.id !== newRequest.id)];
-      localStorage.setItem('aisc_otl_shared_requests', JSON.stringify(updatedShared));
-    } catch (error) {
-      console.error('Failed to save to shared storage:', error);
-    }
-    
     // Auto-Notify Supervisor
     await sendEmailViaGmailAPI(
       newRequest.supervisorEmail, 
@@ -297,15 +259,6 @@ const App: React.FC = () => {
       const newRequests = requests.map(req => req.id === updatedRequest.id ? updatedRequest : req);
       setRequests(newRequests);
       localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(newRequests));
-    }
-
-    // Also update shared storage
-    try {
-      const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
-      const updatedShared = sharedRequests.map(req => req.id === updatedRequest.id ? updatedRequest : req);
-      localStorage.setItem('aisc_otl_shared_requests', JSON.stringify(updatedShared));
-    } catch (error) {
-      console.error('Failed to update shared storage:', error);
     }
 
     // Context-Aware Notifications

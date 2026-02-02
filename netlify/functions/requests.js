@@ -1,3 +1,18 @@
+// Use a simple in-memory storage with persistence
+let requests = [];
+
+// Try to load existing requests from environment variable or file
+try {
+  // In production, this would be a database
+  // For now, we'll use a simple approach with environment variables
+  const existingRequests = process.env.EXISTING_REQUESTS;
+  if (existingRequests) {
+    requests = JSON.parse(existingRequests);
+  }
+} catch (error) {
+  console.log('Starting with empty requests array');
+}
+
 exports.handler = async function(event, context) {
   console.log('🔄 Requests function called, method:', event.httpMethod);
   
@@ -12,17 +27,26 @@ exports.handler = async function(event, context) {
 
   try {
     if (httpMethod === 'GET') {
-      console.log('📤 Returning requests: 0');
+      console.log('📤 Returning requests:', requests.length);
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify([])
+        body: JSON.stringify(requests)
       };
     }
     
     if (httpMethod === 'POST') {
       const newRequest = JSON.parse(event.body);
-      console.log('➕ Added new request:', newRequest.id);
+      
+      // Check if request already exists
+      const existingIndex = requests.findIndex(req => req.id === newRequest.id);
+      if (existingIndex !== -1) {
+        requests[existingIndex] = newRequest;
+        console.log('🔄 Updated existing request:', newRequest.id);
+      } else {
+        requests.unshift(newRequest);
+        console.log('➕ Added new request:', newRequest.id);
+      }
       
       return {
         statusCode: 201,
@@ -33,11 +57,22 @@ exports.handler = async function(event, context) {
     
     if (httpMethod === 'PUT') {
       const updatedRequest = JSON.parse(event.body);
-      console.log('✏️ Updated request:', updatedRequest.id);
+      const index = requests.findIndex(req => req.id === updatedRequest.id);
+      
+      if (index !== -1) {
+        requests[index] = updatedRequest;
+        console.log('✏️ Updated request:', updatedRequest.id);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify(updatedRequest)
+        };
+      }
+      
       return {
-        statusCode: 200,
+        statusCode: 404,
         headers,
-        body: JSON.stringify(updatedRequest)
+        body: JSON.stringify({ error: 'Request not found' })
       };
     }
     
