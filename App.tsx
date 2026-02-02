@@ -49,10 +49,22 @@ const App: React.FC = () => {
         fetch(`${API_BASE}/balances`)
       ]);
       
+      let requestsData = [];
+      
       if (requestsRes.ok) {
-        const requestsData = await requestsRes.json();
+        requestsData = await requestsRes.json();
         setRequests(requestsData);
         localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
+      } else {
+        // Try to get from shared storage if API fails
+        try {
+          const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
+          requestsData = sharedRequests;
+          setRequests(requestsData);
+          localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
+        } catch (error) {
+          console.error('Failed to get shared requests:', error);
+        }
       }
       
       if (balancesRes.ok) {
@@ -68,6 +80,17 @@ const App: React.FC = () => {
       const savedBalances = localStorage.getItem(STORAGE_KEY_BALANCES);
       if (savedRequests) setRequests(JSON.parse(savedRequests));
       if (savedBalances) setBalances(JSON.parse(savedBalances));
+      
+      // Also try shared storage for requests
+      try {
+        const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
+        if (sharedRequests.length > 0) {
+          setRequests(sharedRequests);
+          localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(sharedRequests));
+        }
+      } catch (error) {
+        console.error('Failed to get shared requests:', error);
+      }
     }
   };
 
@@ -205,6 +228,7 @@ const App: React.FC = () => {
         const updatedRequests = [savedRequest, ...requests];
         setRequests(updatedRequests);
         localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(updatedRequests));
+        console.log('✅ Request saved to API:', savedRequest);
       } else {
         throw new Error('Failed to save request to API');
       }
@@ -214,6 +238,16 @@ const App: React.FC = () => {
       const updatedRequests = [newRequest, ...requests];
       setRequests(updatedRequests);
       localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(updatedRequests));
+    }
+    
+    // Also save to a shared storage for supervisors
+    try {
+      // Save to localStorage with a shared key for all users
+      const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
+      const updatedShared = [newRequest, ...sharedRequests.filter(r => r.id !== newRequest.id)];
+      localStorage.setItem('aisc_otl_shared_requests', JSON.stringify(updatedShared));
+    } catch (error) {
+      console.error('Failed to save to shared storage:', error);
     }
     
     // Auto-Notify Supervisor
@@ -253,6 +287,15 @@ const App: React.FC = () => {
       localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(newRequests));
     }
 
+    // Also update shared storage
+    try {
+      const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
+      const updatedShared = sharedRequests.map(req => req.id === updatedRequest.id ? updatedRequest : req);
+      localStorage.setItem('aisc_otl_shared_requests', JSON.stringify(updatedShared));
+    } catch (error) {
+      console.error('Failed to update shared storage:', error);
+    }
+
     // Context-Aware Notifications
     if (updatedRequest.status === ApprovalStatus.SUPERVISOR_APPROVED) {
       // Stage 1 Done -> Notify Director
@@ -268,18 +311,17 @@ const App: React.FC = () => {
         `[SUCCESS] PL Request Fully Authorized!`,
         `Congratulations ${updatedRequest.staffName},\n\nYour request for "${updatedRequest.activityTitle}" has been fully authorized by the OTL Director.\n\nYou may proceed with the next steps as per school policy.`
       );
-      // Notify Finance
       await sendEmailViaGmailAPI(
         FINANCE_EMAIL,
-        `[RECORD] New Approved PL Activity: ${updatedRequest.staffName}`,
-        `Professional Learning Activity "${updatedRequest.activityTitle}" for ${updatedRequest.staffName} has received final authorization.`
+        `[PAYMENT APPROVAL] Professional Learning Request: ${updatedRequest.staffName}`,
+        `A PL request for "${updatedRequest.activityTitle}" has been fully approved.\n\nTotal Cost: $${updatedRequest.totalCost}\n\nPlease process payment according to school procedures.`
       );
     } else if (updatedRequest.status === ApprovalStatus.REJECTED) {
       // Rejected -> Notify Faculty
       await sendEmailViaGmailAPI(
         updatedRequest.staffEmail,
-        `[UPDATE] PL Request Decision: Declined`,
-        `Dear ${updatedRequest.staffName},\n\nYour request for "${updatedRequest.activityTitle}" has been reviewed and declined.\n\nComments: ${updatedRequest.supervisorComments || updatedRequest.otlDirectorComments || 'No comments provided.'}`
+        `[UPDATE] PL Request Status Update`,
+        `Your request for "${updatedRequest.activityTitle}" has been reviewed.\n\nStatus: ${updatedRequest.status}\n\nComments: ${updatedRequest.supervisorComments || updatedRequest.otlDirectorComments || 'No additional comments provided.'}\n\nPlease contact your supervisor for further clarification.`
       );
     }
   };
