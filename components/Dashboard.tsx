@@ -31,6 +31,24 @@ const Dashboard: React.FC<Props> = ({ requests, currentUser, onRefresh, onRefres
   // Normalize current user email for robust matching
   const userEmail = currentUser?.email.toLowerCase().trim() || "";
 
+  // Debug logging
+  console.log('👤 Current user:', {
+    email: currentUser?.email,
+    role: currentUser?.role,
+    normalizedEmail: userEmail
+  });
+  
+  console.log('📋 All requests loaded:', requests.length);
+  requests.forEach((req, index) => {
+    console.log(`📄 Request ${index + 1}:`, {
+      id: req.id,
+      staffName: req.staffName,
+      staffEmail: req.staffEmail,
+      supervisorEmail: req.supervisorEmail,
+      status: req.status
+    });
+  });
+
   // Auto-refresh for supervisors and directors every 30 seconds
   useEffect(() => {
     if (currentUser?.role === 'SUPERVISOR' || currentUser?.role === 'DIRECTOR') {
@@ -75,6 +93,16 @@ const Dashboard: React.FC<Props> = ({ requests, currentUser, onRefresh, onRefres
   const actionRequired = requests.filter(req => {
     const isDesignatedSupervisor = req.supervisorEmail.toLowerCase().trim() === userEmail;
     const isDirector = currentUser?.role === 'DIRECTOR';
+    
+    // Debug logging
+    console.log('🔍 Checking request:', {
+      requestId: req.id,
+      requestSupervisor: req.supervisorEmail.toLowerCase().trim(),
+      currentUserEmail: userEmail.toLowerCase().trim(),
+      isDesignatedSupervisor,
+      isDirector,
+      status: req.status
+    });
     
     // Stage 1: Needs Supervisor approval
     if (req.status === ApprovalStatus.PENDING) {

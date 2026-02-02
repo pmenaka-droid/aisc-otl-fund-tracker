@@ -53,19 +53,30 @@ const App: React.FC = () => {
       
       if (requestsRes.ok) {
         requestsData = await requestsRes.json();
-        setRequests(requestsData);
-        localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
+        console.log('✅ Requests from API:', requestsData.length);
       } else {
-        // Try to get from shared storage if API fails
-        try {
-          const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
-          requestsData = sharedRequests;
-          setRequests(requestsData);
-          localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
-        } catch (error) {
-          console.error('Failed to get shared requests:', error);
-        }
+        console.log('⚠️ API requests failed, trying shared storage');
       }
+      
+      // Always try to get from shared storage and merge
+      try {
+        const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
+        console.log('📁 Shared requests found:', sharedRequests.length);
+        
+        // Merge API and shared requests, remove duplicates
+        const allRequests = [...requestsData, ...sharedRequests];
+        const uniqueRequests = allRequests.filter((req, index, self) => 
+          index === self.findIndex(r => r.id === req.id)
+        );
+        
+        requestsData = uniqueRequests;
+        console.log('🔄 Merged requests total:', requestsData.length);
+      } catch (error) {
+        console.error('Failed to get shared requests:', error);
+      }
+      
+      setRequests(requestsData);
+      localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(requestsData));
       
       if (balancesRes.ok) {
         const balancesData = await balancesRes.json();
@@ -85,6 +96,7 @@ const App: React.FC = () => {
       try {
         const sharedRequests = JSON.parse(localStorage.getItem('aisc_otl_shared_requests') || '[]');
         if (sharedRequests.length > 0) {
+          console.log('📁 Using shared requests as fallback:', sharedRequests.length);
           setRequests(sharedRequests);
           localStorage.setItem(STORAGE_KEY_REQS, JSON.stringify(sharedRequests));
         }
