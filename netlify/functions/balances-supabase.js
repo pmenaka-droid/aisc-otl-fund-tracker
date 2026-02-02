@@ -105,21 +105,13 @@ exports.handler = async function(event, context) {
     
     if (error) throw error;
     
-    // Transform data to match frontend format
-    const formattedData = (data || []).map(item => ({
-      email: item.email,
-      name: item.name,
-      department: item.department,
-      remainingBalance: item.remaining_balance
-    }));
-    
     return {
       statusCode: 200,
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(formattedData)
+      body: JSON.stringify(data || balances)
     };
     
   } catch (error) {

@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",
+    "@supabase/supabase-js": "^2.93.3",
     "lucide-react": "^0.562.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
