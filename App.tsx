@@ -79,12 +79,12 @@ const App: React.FC = () => {
   // Refresh balances specifically from Google Sheets
   const refreshBalances = async () => {
     try {
-      const response = await fetch(`${API_BASE}/balances/refresh`);
+      const response = await fetch(`${API_BASE}/balances`);
       if (response.ok) {
         const data = await response.json();
-        setBalances(data.balances);
-        localStorage.setItem(STORAGE_KEY_BALANCES, JSON.stringify(data.balances));
-        console.log('✅ Balances refreshed from Google Sheets:', data.balances);
+        setBalances(data);
+        localStorage.setItem(STORAGE_KEY_BALANCES, JSON.stringify(data));
+        console.log('✅ Balances refreshed from Google Sheets:', data);
       } else {
         throw new Error('Failed to refresh balances');
       }
