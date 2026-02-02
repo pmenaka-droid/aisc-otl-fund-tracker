@@ -1,6 +1,4 @@
-let requests = [];
-
-const handler = async function(event, context) {
+exports.handler = async function(event, context) {
   console.log('🔄 Requests function called, method:', event.httpMethod);
   
   const { httpMethod } = event;
@@ -14,17 +12,16 @@ const handler = async function(event, context) {
 
   try {
     if (httpMethod === 'GET') {
-      console.log('📤 Returning requests:', requests.length);
+      console.log('📤 Returning requests: 0');
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify(requests)
+        body: JSON.stringify([])
       };
     }
     
     if (httpMethod === 'POST') {
       const newRequest = JSON.parse(event.body);
-      requests.unshift(newRequest);
       console.log('➕ Added new request:', newRequest.id);
       
       return {
@@ -36,22 +33,11 @@ const handler = async function(event, context) {
     
     if (httpMethod === 'PUT') {
       const updatedRequest = JSON.parse(event.body);
-      const index = requests.findIndex(req => req.id === updatedRequest.id);
-      
-      if (index !== -1) {
-        requests[index] = updatedRequest;
-        console.log('✏️ Updated request:', updatedRequest.id);
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify(updatedRequest)
-        };
-      }
-      
+      console.log('✏️ Updated request:', updatedRequest.id);
       return {
-        statusCode: 404,
+        statusCode: 200,
         headers,
-        body: JSON.stringify({ error: 'Request not found' })
+        body: JSON.stringify(updatedRequest)
       };
     }
     
@@ -70,5 +56,3 @@ const handler = async function(event, context) {
     };
   }
 };
-
-module.exports = { handler };
