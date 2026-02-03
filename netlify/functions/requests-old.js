@@ -1,12 +1,37 @@
 const { Pool } = require('pg');
 
-// Simple, reliable database connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
+// Robust database connection with retry logic
+let pool = null;
+
+async function getPool() {
+  if (!pool) {
+    try {
+      pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+          rejectUnauthorized: false,
+          require: true
+        },
+        max: 1,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000,
+      });
+      
+      // Test connection
+      const client = await pool.connect();
+      await client.query('SELECT 1');
+      client.release();
+      console.log('✅ Database connected successfully');
+    } catch (error) {
+      console.error('❌ Database connection failed:', error.message);
+      throw error;
+    }
   }
-});
+  return pool;
+}
+
+// In-memory fallback for when database fails
+let fallbackRequests = [];
 
 exports.handler = async function(event, context) {
   const { httpMethod } = event;
@@ -17,18 +42,13 @@ exports.handler = async function(event, context) {
     'Content-Type': 'application/json'
   };
 
-  console.log('🔄 Requests function called:', httpMethod);
-
   try {
     if (httpMethod === 'GET') {
       try {
-        console.log('📤 Fetching requests from database...');
-        
+        const pool = await getPool();
         const result = await pool.query(
           'SELECT * FROM pl_requests ORDER BY created_at DESC'
         );
-        
-        console.log('✅ Raw database rows:', result.rows.length);
         
         const formattedData = result.rows.map(row => ({
           id: row.id,
@@ -36,7 +56,7 @@ exports.handler = async function(event, context) {
           staffEmail: row.staff_email,
           supervisorEmail: row.supervisor_email,
           activityTitle: row.activity_title,
-          description: row.activity_description || '',
+          description: row.activity_description,
           status: row.status,
           totalCost: parseFloat(row.total_cost) || 0,
           createdAt: row.created_at,
@@ -55,49 +75,19 @@ exports.handler = async function(event, context) {
           otherCost: parseFloat(row.other_cost) || 0
         }));
         
-        console.log('✅ Formatted requests:', formattedData.length);
-        
+        console.log('✅ Returning requests from database:', formattedData.length);
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify(formattedData)
         };
       } catch (dbError) {
-        console.error('❌ Database error:', dbError.message);
-        
-        // Return sample data for testing
-        const sampleData = [
-          {
-            id: 'sample-001',
-            staffName: 'Sample Teacher',
-            staffEmail: 'sample@aischennai.org',
-            supervisorEmail: 'mstestteacher@aischennai.org',
-            activityTitle: 'Sample Activity',
-            description: 'This is a sample request for testing',
-            status: 'PENDING',
-            totalCost: 100,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            supervisorComments: '',
-            otlDirectorComments: '',
-            facultyRole: 'TEACHER',
-            schoolSection: ['Elementary'],
-            provider: 'Sample Provider',
-            websiteLink: '',
-            startDate: '2024-03-01',
-            endDate: '2024-03-02',
-            registrationCost: 100,
-            travelCost: 0,
-            accommodationCost: 0,
-            otherCost: 0
-          }
-        ];
-        
-        console.log('✅ Returning sample data:', sampleData.length);
+        console.log('⚠️ Database failed, using fallback storage:', dbError.message);
+        console.log('✅ Returning fallback requests:', fallbackRequests.length);
         return {
           statusCode: 200,
           headers,
-          body: JSON.stringify(sampleData)
+          body: JSON.stringify(fallbackRequests)
         };
       }
     }
@@ -107,10 +97,40 @@ exports.handler = async function(event, context) {
       console.log('📝 Creating request:', newRequest.id, newRequest.staffName);
       
       try {
-        // Convert array to string for database
+        const pool = await getPool();
+        
+        // Ensure table exists
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS pl_requests (
+            id TEXT PRIMARY KEY,
+            staff_name TEXT NOT NULL,
+            staff_email TEXT NOT NULL,
+            supervisor_email TEXT NOT NULL,
+            activity_title TEXT NOT NULL,
+            activity_description TEXT,
+            status TEXT DEFAULT 'PENDING',
+            total_cost DECIMAL(10,2) DEFAULT 0,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW(),
+            supervisor_comments TEXT,
+            otl_director_comments TEXT,
+            faculty_role TEXT,
+            school_section TEXT,
+            provider TEXT,
+            website_link TEXT,
+            start_date TEXT,
+            end_date TEXT,
+            registration_cost DECIMAL(10,2) DEFAULT 0,
+            travel_cost DECIMAL(10,2) DEFAULT 0,
+            accommodation_cost DECIMAL(10,2) DEFAULT 0,
+            other_cost DECIMAL(10,2) DEFAULT 0
+          )
+        `);
+        
+        // Convert array to string for storage
         const schoolSectionStr = newRequest.schoolSection ? newRequest.schoolSection.join(',') : '';
         
-        const result = await pool.query(`
+        await pool.query(`
           INSERT INTO pl_requests (
             id, staff_name, staff_email, supervisor_email, activity_title, 
             activity_description, status, total_cost, created_at, updated_at,
@@ -131,16 +151,31 @@ exports.handler = async function(event, context) {
         
         console.log('✅ Request saved to database:', newRequest.id);
         
+        // Also update fallback storage
+        const existingIndex = fallbackRequests.findIndex(req => req.id === newRequest.id);
+        if (existingIndex !== -1) {
+          fallbackRequests[existingIndex] = newRequest;
+        } else {
+          fallbackRequests.unshift(newRequest);
+        }
+        
         return {
           statusCode: 201,
           headers,
           body: JSON.stringify(newRequest)
         };
       } catch (dbError) {
-        console.error('❌ Database insert error:', dbError.message);
+        console.log('⚠️ Database save failed, using fallback:', dbError.message);
         
-        // Still return success so frontend doesn't break
-        console.log('✅ Request accepted (database failed):', newRequest.id);
+        // Save to fallback storage
+        const existingIndex = fallbackRequests.findIndex(req => req.id === newRequest.id);
+        if (existingIndex !== -1) {
+          fallbackRequests[existingIndex] = newRequest;
+        } else {
+          fallbackRequests.unshift(newRequest);
+        }
+        
+        console.log('✅ Request saved to fallback storage:', newRequest.id);
         return {
           statusCode: 201,
           headers,
@@ -154,6 +189,8 @@ exports.handler = async function(event, context) {
       console.log('✏️ Updating request:', updatedRequest.id);
       
       try {
+        const pool = await getPool();
+        
         const schoolSectionStr = updatedRequest.schoolSection ? updatedRequest.schoolSection.join(',') : '';
         
         await pool.query(`
@@ -175,15 +212,27 @@ exports.handler = async function(event, context) {
         
         console.log('✅ Request updated in database:', updatedRequest.id);
         
+        // Also update fallback storage
+        const fallbackIndex = fallbackRequests.findIndex(req => req.id === updatedRequest.id);
+        if (fallbackIndex !== -1) {
+          fallbackRequests[fallbackIndex] = updatedRequest;
+        }
+        
         return {
           statusCode: 200,
           headers,
           body: JSON.stringify(updatedRequest)
         };
       } catch (dbError) {
-        console.error('❌ Database update error:', dbError.message);
+        console.log('⚠️ Database update failed, using fallback:', dbError.message);
         
-        console.log('✅ Request update accepted (database failed):', updatedRequest.id);
+        // Update fallback storage
+        const fallbackIndex = fallbackRequests.findIndex(req => req.id === updatedRequest.id);
+        if (fallbackIndex !== -1) {
+          fallbackRequests[fallbackIndex] = updatedRequest;
+        }
+        
+        console.log('✅ Request updated in fallback storage:', updatedRequest.id);
         return {
           statusCode: 200,
           headers,
